@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7f5">
+  <meta name="description" content="CampusRelay keeps a source-backed living timeline of your student opportunities.">
+  <title>CampusRelay — Your living event timeline</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">↗</span><span>campus<span class="brand-light">relay</span><small>YOUR EVENT JOURNEY</small></span></div>
+      <nav class="side-nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="overview"><span>◫</span> Overview</button>
+        <button class="nav-item" data-view="timeline"><span>◷</span> Living timeline</button>
+        <button class="nav-item" data-view="review"><span>◇</span> Review queue <b id="review-count">0</b></button>
+        <button class="nav-item" data-view="sources"><span>▤</span> Sources</button>
+      </nav>
+      <div class="sidebar-bottom"><div class="side-note"><span class="pulse"></span> Browser workspace<br><small>Your prototype data stays on this device.</small></div><div class="avatar-row"><span class="avatar">S</span><span>Student workspace<small>Personal timeline</small></span><span class="more">···</span></div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="crumb">Workspace <span>/</span> <strong id="crumb-current">Overview</strong></div><div class="top-actions"><span class="today" id="today-label"></span><button class="icon-button" id="reset-button" title="Reset demo data" aria-label="Reset demo data">↺</button></div></header>
+      <div class="content" id="content"></div>
+    </main>
+  </div>
+  <dialog id="import-dialog"><form method="dialog" class="modal"><div class="modal-head"><div><div class="eyebrow">ADD TO YOUR TIMELINE</div><h2>Import a communication</h2><p>Paste an event poster’s text, email, announcement, or shared message.</p></div><button class="close" value="cancel" aria-label="Close">×</button></div><label for="source-type">Source type</label><select id="source-type"><option>Email / forwarded message</option><option>Poster or screenshot text</option><option>Organizer announcement</option><option>Shared message</option><option>Event URL</option></select><label for="source-title">Source label</label><input id="source-title" placeholder="e.g. Organizer email, October 13"><label for="source-text">Communication text</label><textarea id="source-text" rows="9" placeholder="Paste the event name, dates, registration ID, announcement, or participation update here..."></textarea><div class="modal-tip">▧ &nbsp;Text extraction runs locally using explicit dates and keywords. Review every proposed change before applying it.</div><div class="modal-actions"><button class="button ghost" value="cancel">Cancel</button><button type="button" class="button primary" id="process-import">Analyze communication <span>→</span></button></div></form></dialog>
+  <dialog id="result-dialog"><div class="modal" id="result-content"></div></dialog>
+  <script src="app.js"></script>
+</body></html>
