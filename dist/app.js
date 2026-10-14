@@ -35,8 +35,9 @@ function route() {
   const hash = location.hash.slice(1);
   let id = ''; try { id = hash.startsWith('event/') ? decodeURIComponent(hash.slice(6)) : ''; } catch {}
   if (id && eventById(id)) { selected = id; view = 'timeline'; }
-  else { selected = null; view = ['overview','timeline','review','conflicts','sources','settings'].includes(hash) ? hash : 'overview'; }
+  else { selected = null; view = ['overview','timeline','review','conflicts','sources','settings'].includes(hash) ? hash : 'home'; }
   render();
+  if (view !== 'home' || hash === 'home') window.scrollTo({top:0});
 }
 const datesOf = e => Object.entries(e.dates).filter(([,d]) => E.validDate(d)).sort((a,b) => a[1].localeCompare(b[1]));
 const nextDate = e => datesOf(e).find(([,d]) => d >= E.today());
@@ -101,6 +102,8 @@ function settingsView() {
   return hero('Your workspace, your records', 'Keep a backup, move your timeline, or start with your own opportunities.', 'WORKSPACE',false) + `<div class="settings-grid"><section class="panel detail-section"><h3>Calendar</h3><p class="settings-description">Download reviewed milestones as an .ics calendar file. This is a snapshot: export again after dates change.</p><button class="button primary" data-action="calendar">Download calendar ↓</button></section><section class="panel detail-section"><h3>Backup & restore</h3><p class="settings-description">Save event records, original communications, and pending reviews. Restore an exported backup in another browser.</p><div class="review-actions"><button class="button primary" data-action="backup">Export backup ↓</button><label class="button ghost file-label">Restore backup<input type="file" id="backup-file" accept=".json,application/json" class="sr-only"></label></div></section><section class="panel detail-section"><h3>Start fresh</h3><p class="settings-description">Begin with an empty workspace or reset the sample data. Export a backup first to keep your records.</p><div class="review-actions"><button class="button ghost" data-action="clear">Empty workspace</button><button class="button ghost" data-action="reset">Reset demo</button></div></section><section class="panel detail-section"><h3>What is connected?</h3><p class="settings-description">Text analysis runs in this browser. Image attachments are saved as evidence, with text entered by you. This version has no email forwarding, AI service, live calendar feed, or shared team database.</p>${tag('Browser-local prototype','gray')}</section></div>`;
 }
 function render() {
+  window.CampusLanding?.setVisible(view === 'home');
+  if (view === 'home') return;
   $('review-count').textContent = state.review.length;
   document.querySelectorAll('.nav-item').forEach(b => { const active = b.dataset.view === view; b.classList.toggle('active',active); b.setAttribute('aria-current',active ? 'page' : 'false'); });
   $('crumb-current').textContent = selected ? 'Event details' : ({overview:'Overview',timeline:'Living timeline',review:'Review queue',sources:'Sources',conflicts:'ConflictIQ',settings:'Workspace'}[view]);
@@ -263,6 +266,7 @@ document.addEventListener('change',event => {
   if (dialogType === 'review' && (event.target.id === 'match-event' || event.target.id.startsWith('fact-'))) updateDraft();
 });
 window.addEventListener('popstate',route);
+window.addEventListener('hashchange',route);
 window.addEventListener('storage',event => { if (event.key === KEY && event.newValue) { try { state = normalize(E.validateBackup(JSON.parse(event.newValue))); render(); toast('Workspace updated in another tab.'); } catch {} } });
 route();
 

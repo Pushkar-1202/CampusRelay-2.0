@@ -23,6 +23,8 @@ npm test
 
 ## Features
 
+- Animated landing page with floating event cards, an interactive simulated journey, scroll reveals, and a pause control
+- Dark workspace styling, animated entrances, and hover feedback with reduced-motion support
 - Chronological milestones, searchable event cards, and participation filters
 - Import pasted communications, text files, and .eml messages
 - Attach a PNG, JPEG, or WebP poster as source evidence (up to 1.5 MB)
@@ -65,6 +67,8 @@ ConflictIQ compares known dates. Without start/end times, same-day commitments a
 | `dist/styles.css`, `dist/enhancements.css` | Responsive interface |
 | `dist/engine.js` | Extraction, matching, changes, conflicts, calendar, backup validation |
 | `dist/app.js` | Browser state, views, and review interactions |
+| `dist/landing.js`, `dist/landing.css` | Animated product story and interactive landing demonstration |
+| `dist/workspace-motion.css` | Dark workspace styling and transition effects |
 | `dist/seed.js` | Labeled demonstration records |
 | `scripts/serve.cjs` | Dependency-free local server |
 | `tests/engine.test.cjs` | Reconciliation regression tests |
