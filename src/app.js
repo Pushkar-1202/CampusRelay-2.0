@@ -1,15 +1,15 @@
 'use strict';
-const E = RelayEngine, KEY = 'campusrelay-v1', $ = id => document.getElementById(id);
+const E = RelayEngine, KEY = 'campusrelay-2-workspace', $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const fmt = value => E.validDate(value) ? new Date(value + 'T12:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : value || 'Not recorded';
 const short = value => E.validDate(value) ? new Date(value + 'T12:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric'}) : value || 'Not recorded';
 const tag = (value, color) => `<span class="tag ${color || (['Shortlisted','Completed','Participation confirmed'].includes(value) ? 'green' : value === 'Registered' ? 'blue' : E.CLOSED.includes(value) ? 'orange' : 'gray')}">${esc(value)}</span>`;
 const source = id => state.sources.find(s => s.id === id), eventById = id => state.events.find(e => e.id === id);
 let state = load(), view = 'overview', selected = null, filter = 'All', query = '', mode = 'milestones';
-let dialogType = '', dialogId = '', attachment = null, restoreData = null, toastTimer;
+let dialogType = '', dialogId = '', attachment = null, restoreData = null, toastTimer, dialogTrigger = null, storageProblem = '';
 
 function normalize(input) {
-  input.events.forEach(e => { e.factSources ||= {}; e.venue ||= ''; e.notes ||= ''; });
+  input.events.forEach(e => { e.factSources ||= {}; e.venue ||= ''; e.notes ||= ''; e.history.forEach(h => h.id ||= E.uid('change')); });
   input.sources.forEach(s => { s.date ||= new Date().toISOString(); s.type ||= 'Student input'; s.reliability ||= 'Student-provided'; });
   input.review.forEach(r => { r.data.warnings ||= []; r.data.dates ||= {}; r.data.venue ||= ''; r.candidates ||= E.match(r.data, input.events, input.sources.find(s => s.id === r.source)?.text || ''); });
   return input;
@@ -20,7 +20,7 @@ function load() {
 }
 function persist() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); return true; }
-  catch { toast('Browser storage is full or unavailable. Export a backup before closing.', true); return false; }
+  catch { storageProblem = 'Changes are only in memory: browser storage is full or blocked. Export a backup before closing this page.'; showStorageWarning(); return false; }
 }
 function save() { persist(); render(); }
 function toast(text, error = false) {
@@ -111,11 +111,12 @@ function render() {
   $('content').innerHTML = selected && eventById(selected) ? detail(eventById(selected)) : ({overview,timeline,review:reviewView,sources:sourcesView,conflicts:conflictsView,settings:settingsView}[view] || overview)();
 }
 function openDialog(type,title,content,actions='',id='',wide=false) {
+  if (!$('workspace-dialog').open) dialogTrigger = document.activeElement;
   dialogType = type; dialogId = id; $('workspace-dialog').classList.toggle('wide-dialog',wide);
   $('dialog-content').innerHTML = `<div class="modal-head"><div><div class="eyebrow">CAMPUSRELAY</div><h2 id="dialog-title">${esc(title)}</h2></div><button class="close" data-action="close" aria-label="Close dialog">×</button></div>${content}<div class="form-error" id="form-error" role="alert"></div>${actions ? `<div class="modal-actions">${actions}</div>` : ''}`;
   if (!$('workspace-dialog').open) $('workspace-dialog').showModal();
 }
-const closeDialog = () => { $('workspace-dialog').close(); attachment = null; dialogType = ''; };
+const closeDialog = () => { $('workspace-dialog').close(); attachment = null; dialogType = ''; if(dialogTrigger?.isConnected)dialogTrigger.focus(); };
 const cancelButton = '<button class="button ghost" data-action="close">Cancel</button>';
 const field = (label,id,value='',type='text',extra='') => `<label for="${id}">${esc(label)}</label><input id="${id}" type="${type}" value="${esc(value)}" ${extra}>`;
 function showImport(id='') {
@@ -168,21 +169,25 @@ function updateDraft() {
 }
 function applyReview() {
   const r = state.review.find(x => x.id === dialogId); if (!r) return;
+  if(r.data.digest)return formError('Split this digest into individual event messages before approving.');
+  if($('match-event').value==='__choose')return formError('Choose an existing event or explicitly create a new event.');
   let data; try { data = collectFacts(); } catch (error) { return formError(error.message); }
   const event = eventById($('match-event').value);
   if (event && E.stale(event,r)) { r.data = data; r.eventId = event.id; showReview(r.id); return formError('The event changed while this review was open. Review the refreshed comparison and approve again.'); }
   if (!event && !data.name) return formError('Enter an event name before creating the opportunity.');
   if (!event && state.events.some(e => e.name.toLowerCase() === data.name.toLowerCase())) return formError('An event with this name already exists. Select it above to avoid a duplicate.');
-  let id;
+  let id, applied=[];
   if (event) {
     const accepted = new Set([...document.querySelectorAll('input[name="accepted-field"]:checked')].map(el => el.value));
-    E.apply(event,{...data,dates:Object.fromEntries(Object.entries(data.dates).filter(([k]) => accepted.has(k))),stage:accepted.has('stage') ? data.stage : null,venue:accepted.has('venue') ? data.venue : '',registrationId:accepted.has('registrationId') ? data.registrationId : '',url:accepted.has('url') ? data.url : ''},r.source); id = event.id;
+    applied=E.apply(event,{...data,dates:Object.fromEntries(Object.entries(data.dates).filter(([k]) => accepted.has(k)||event.dates[k]===data.dates[k])),stage:accepted.has('stage') ? data.stage : null,venue:accepted.has('venue') ? data.venue : '',registrationId:accepted.has('registrationId') ? data.registrationId : '',url:accepted.has('url') ? data.url : ''},r.source); id = event.id;
   } else { const e = makeEvent(data,r.source); state.events.unshift(e); id = e.id; }
-  state.review = state.review.filter(x => x.id !== r.id); closeDialog(); persist(); navigate('timeline',id); toast('Source saved and selected facts applied.');
+  state.review = state.review.filter(x => x.id !== r.id); closeDialog(); persist(); navigate('timeline',id);
+  const description=applied.length?applied.map(c=>(c.field==='stage'?'Participation':c.field)+(c.old?' moved '+changeValue(c.field,c.old)+' → ':' added: ')+changeValue(c.field,c.value)).join('; '):event?'Source attached; no facts changed.':'Created '+data.name+'.';
+  showReceipt(description,id);
 }
 function makeEvent(data,sourceId) {
   const stage = data.stage || 'Discovered';
-  return {id:E.uid('event'),name:data.name,organizer:data.organizer || '',category:/workshop/i.test(data.name) ? 'Workshop' : /hackathon/i.test(data.name) ? 'Hackathon' : 'Event',stage,dates:data.dates,url:E.normalizeUrl(data.url),venue:data.venue || '',registrationId:data.registrationId || '',notes:'',sources:[sourceId],factSources:Object.fromEntries([...Object.keys(data.dates),'stage',...(data.venue ? ['venue'] : [])].map(k => [k,sourceId])),history:[],journey:[{label:stage,date:E.today(),source:sourceId}],created:new Date().toISOString()};
+  return {id:E.uid('event'),name:data.name,organizer:data.organizer || '',category:/workshop/i.test(data.name) ? 'Workshop' : /hackathon/i.test(data.name) ? 'Hackathon' : 'Event',stage,dates:data.dates,timeNotes:data.timeNotes||{},factCheckedAt:Object.fromEntries(Object.keys(data.dates).map(k=>[k,new Date().toISOString()])),url:E.normalizeUrl(data.url),venue:data.venue || '',registrationId:data.registrationId || '',notes:'',sources:[sourceId],factSources:Object.fromEntries([...Object.keys(data.dates),'stage',...(data.venue ? ['venue'] : [])].map(k => [k,sourceId])),history:[],journey:[{label:stage,date:E.today(),source:sourceId}],created:new Date().toISOString()};
 }
 function showEditor(id) {
   const event = id && eventById(id);
@@ -222,7 +227,7 @@ async function handleFile(file) {
   if (file.size > 1500000) return formError('Use a file smaller than 1.5 MB to save it in this browser.');
   if (/\.(txt|eml)$/i.test(file.name)) { $('source-text').value = (await file.text()).slice(0,20000); $('source-title').value ||= file.name; return; }
   if (!['image/png','image/jpeg','image/webp'].includes(file.type)) return formError('Attach a PNG, JPEG, WebP, text, or .eml file.');
-  const reader = new FileReader(); reader.onload = () => { attachment = {data:reader.result,name:file.name}; $('attachment-preview').innerHTML = `<img src="${esc(reader.result)}" alt="Poster preview"><span>${esc(file.name)} · add its text above</span>`; $('source-type').value = 'Poster or screenshot'; $('source-title').value ||= file.name; }; reader.readAsDataURL(file);
+  return new Promise(resolve=>{const reader = new FileReader(); reader.onload = () => { if($('attachment-preview')){attachment = {data:reader.result,name:file.name}; $('attachment-preview').innerHTML = `<img src="${esc(reader.result)}" alt="Poster preview"><span>${esc(file.name)} · add its text above</span>`; $('source-type').value = 'Poster or screenshot'; $('source-title').value ||= file.name;}resolve(); }; reader.onerror=()=>{formError('This file could not be read. Try choosing it again.');resolve();}; reader.readAsDataURL(file);});
 }
 async function handleBackup(file) {
   if (!file) return;
@@ -252,7 +257,7 @@ document.addEventListener('click',async event => {
   else if (action === 'backup') { download('campusrelay-backup-'+E.today()+'.json',JSON.stringify({...state,version:2,exportedAt:new Date().toISOString()},null,2),'application/json'); toast('Workspace backup downloaded.'); }
   else if (action === 'restore-confirm' && restoreData) { state = restoreData; restoreData = null; closeDialog(); save(); navigate('overview'); toast('Workspace restored.'); }
   else if (action === 'clear' || action === 'reset') confirmReset(action === 'reset');
-  else if (action === 'reset-confirm') { state = t.dataset.demo === 'true' ? normalize(createDemo()) : {events:[],sources:[],review:[]}; closeDialog(); save(); navigate('overview'); toast('Workspace ready.'); }
+  else if (action === 'reset-confirm') { state = t.dataset.demo === 'true' ? normalize(createDemo()) : {events:[],sources:[],review:[]}; closeDialog(); if(t.dataset.demo==='true')save();else {try{localStorage.removeItem(KEY);}catch{storageProblem='Could not wipe browser storage. Clear site data in browser settings.';showStorageWarning();}render();} navigate('overview'); toast('Workspace ready.'); }
   else if (action === 'share') showShare(id);
   else if (action === 'share-download') download('campusrelay-team-summary.txt',E.teamSummary(eventById(dialogId)),'text/plain;charset=utf-8');
   else if (action === 'copy-summary') { try { await navigator.clipboard.writeText(E.teamSummary(eventById(dialogId))); toast('Team summary copied.'); } catch { formError('Clipboard access unavailable. Use Download text instead.'); } }

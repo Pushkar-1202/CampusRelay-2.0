@@ -20,7 +20,7 @@
     ['Shortlisted ✦','Keep your next chapter in view.','A reviewed announcement moves your participation forward.']
   ];
   let active=-1, pending=0;
-  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+  const reduced=matchMedia('(prefers-reduced-motion: reduce), (pointer: coarse)');
   function draw() {
     pending=0; if(root.hidden) return;
     const box=story.getBoundingClientRect();

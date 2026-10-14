@@ -34,6 +34,7 @@
     } catch { return ''; }
   }
   function parseDate(value, year = new Date().getFullYear()) {
+    value = String(value).replace(/([A-Za-z])\s*[’'](\d{2})\b/g, '$1 20$2');
     let m = String(value).match(/\b(20\d{2}|2100)-(\d{2})-(\d{2})\b/);
     if (m) return dateParts(+m[1], +m[2], +m[3]);
     const names = months.map(x => x.slice(0, 3) + '(?:' + x.slice(3) + ')?').join('|');
@@ -45,13 +46,51 @@
     m = String(value).match(/\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2}|2100)\b/);
     if (m && +m[1] > 12) return dateParts(+m[3], +m[2], +m[1]);
     if (m && +m[2] > 12) return dateParts(+m[3], +m[1], +m[2]);
+    m = String(value).match(/\b(\d{1,2})\/(\d{1,2})(?![\/\d])/);
+    if (m && +m[1] > 12) return dateParts(year,+m[2],+m[1]);
+    if (m && +m[2] > 12) return dateParts(year,+m[1],+m[2]);
     return null;
+  }
+  function cleanText(raw) {
+    let text = String(raw).replace(/\r\n/g,'\n');
+    if (/Content-Transfer-Encoding:\s*base64/i.test(text) && !/multipart\//i.test(text)) {
+      const split=text.indexOf('\n\n');
+      if(split>=0)try { const body=text.slice(split+2).replace(/\s/g,'');text=text.slice(0,split)+'\n'+new TextDecoder().decode(Uint8Array.from(atob(body),c=>c.charCodeAt(0))); } catch {}
+    }
+    if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(text)) text=text.replace(/=\n/g,'').replace(/=([0-9a-f]{2})/gi,(_,h)=>String.fromCharCode(parseInt(h,16)));
+    return text.replace(/<(script|style)[\s\S]*?<\/\1\s*>/gi,'').replace(/<(?:br|\/p|\/div|\/li|\/h[1-6])\b[^>]*>/gi,'\n').replace(/<[^>]*>/g,'').replace(/&(?:nbsp|amp|lt|gt|quot|apos);/g,x=>({'&nbsp;':' ','&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&apos;':"'"}[x])).replace(/&#(x[0-9a-f]+|\d+);/gi,(_,n)=>{const c=n[0].toLowerCase()==='x'?parseInt(n.slice(1),16):+n;return c<=0x10ffff?String.fromCodePoint(c):'';}).replace(/^\s*>\s?/gm,'').trim();
+  }
+  function detectSource(text, image=false) {
+    if(image)return 'Poster or screenshot';
+    if(/^\s*(?:From|Subject|To):/im.test(text)||/forwarded message/i.test(text))return 'Email / forwarded message';
+    if(/^https?:\/\/\S+\s*$/i.test(text.trim()))return 'Event URL';
+    return 'Shared message';
+  }
+  function splitMessages(raw, batch=false) {
+    if(!batch)return [raw.trim()].filter(Boolean);
+    // A blank paragraph alone is not enough: each new item must look like a message.
+    const parts=raw.replace(/\r\n/g,'\n').split(/\n\s*---MESSAGE---\s*\n|\n\s*\n(?=(?:From:|Subject:|Event(?: name)?:|https?:\/\/))/i);
+    return parts.flatMap(part=>part.split(/\n(?=From:)/).filter((s,i,a)=>s.trim()||a.length===1)).map(s=>s.trim()).filter(Boolean);
   }
   function extract(text, now = new Date()) {
     const data = { name: '', organizer: '', registrationId: '', url: '', venue: '', dates: {}, stage: null, warnings: [] };
+    text=cleanText(text).replace(/([A-Za-z])\s*[’'](\d{2})\b/g,'$1 20$2');
+    const eventLabels=[...text.matchAll(/^\s*(?:\d+[.)]\s*)?Event(?: name)?\s*:\s*(.+)$/gim)].map(m=>m[1].trim());
+    if(new Set(eventLabels.map(s=>s.toLowerCase())).size>1 || /\b(?:newsletter|event digest|upcoming events|this week.s events)\b/i.test(text)) {
+      data.digest=true;data.warnings.push('This looks like a multi-event digest. Split it into individual messages before approval.');return data;
+    }
+    // Only a forwarded body with no new facts may supply the current update.
+    const forward=text.search(/-{2,}\s*Forwarded message|^On .+wrote:/im);
+    if(forward>0 && /deadline|shortlisted|confirmed|cancelled/i.test(text.slice(0,forward))) {
+      text=text.slice(0,forward);data.warnings.push('Quoted earlier communication excluded; original source is retained.');
+    }
+    text=text.replace(/\b(?:aakhri|akhri|last)\s+date\s+(?:for\s+)?(?:submission|submit)/gi,'Submission deadline').replace(/\b(?:submission|submit|proposal|registration)\s+ki\s+(?:last\s+date|deadline)/gi,m=>m.split(/\s/)[0]+' deadline').replace(/\bregister\s+(?:by|before)/gi,'Registration deadline');
     const name = text.match(/(?:event(?: name)?|opportunity)\s*:\s*([^\n.]{3,100})/i);
-    const header = text.split('\n').map(x => x.trim()).find(x => /hackathon|challenge|competition|workshop|conference|summit|fest\b/i.test(x));
+    const subject=text.match(/^Subject:\s*(.+)$/im)?.[1]?.replace(/^(?:Re|Fwd?):\s*/i,'').replace(/\s*[-–—|:]\s*(?:registration|confirmation|you(?:'|’)re|shortlist|deadline|update|welcome).*$/i,'');
+    const header = text.split('\n').map(x => x.trim()).find(x => !/https?:\/\/|^(?:From|To|Content-|Date):/i.test(x) && /hackathon|challenge|competition|workshop|conference|summit|fest\b/i.test(x));
     data.name = name?.[1]?.trim() || (header && header.length < 100 ? header.replace(/^(?:subject|event)\s*:\s*/i, '').split(/[.!]|\s[—–]\s|\s(?:by|registration|proposal|submission|final round|shortlisted|deadline)\b/i)[0].trim() : '');
+    if(subject && !/https?:\/\/|^(?:registration|confirmation|congratulations|welcome|update|deadline)\b/i.test(subject))data.name=name?.[1]?.trim()||subject.trim();
+    if(/https?:\/\//i.test(data.name))data.name='';
     data.organizer = text.match(/(?:organizer|organized by|hosted by)\s*:?\s*([^\n.]{3,80})/i)?.[1]?.trim() || '';
     data.registrationId = text.match(/(?:registration|application|team)\s*(?:id|#|number)\s*[:#-]?\s*([A-Z0-9][A-Z0-9_-]{3,40})/i)?.[1] || '';
     data.url = normalizeUrl(text.match(/https?:\/\/[^\s<>]+/i)?.[0]?.replace(/[.,;)]$/, '') || '');
@@ -64,7 +103,7 @@
       const label = hit[0].toLowerCase();
       const field = label.startsWith('registration') ? FIELDS[0] : label.startsWith('proposal') ? FIELDS[1] : /submission|submit|deliverable/.test(label) ? FIELDS[2] : /final/.test(label) ? FIELDS[3] : label.startsWith('workshop') ? FIELDS[4] : FIELDS[5];
       const fragment = text.slice(hit.index + hit[0].length, Math.min(hits[i + 1]?.index ?? text.length, hit.index + 200)).split(/[\n;!]/)[0];
-      const candidates = [...fragment.matchAll(datePattern)];
+      const candidates = [...fragment.matchAll(datePattern), ...fragment.matchAll(/\b\d{1,2}\/\d{1,2}(?![\/\d])/g).filter(m=>!fragment.slice(Math.max(0,m.index-5),m.index).match(/\d[\/-]$/))].filter((m,i,a)=>!a.some((n,j)=>j<i && m.index>=n.index && m.index<n.index+n[0].length)).sort((a,b)=>a.index-b.index);
       if (!candidates.length) return;
       const isRevision = /\b(?:from|extended|moved|changed|rescheduled|revised|now|to)\b/i.test(fragment);
       if (candidates.length > 1 && !isRevision) {
@@ -77,6 +116,7 @@
       if (!/20\d{2}|2100/.test(token)) data.warnings.push(`Year assumed as ${now.getFullYear()} for ${field.toLowerCase()}; please confirm.`);
       if (data.dates[field] && data.dates[field] !== value) data.warnings.push(`This message contains different values for ${field.toLowerCase()}; review both in the source.`);
       data.dates[field] = value;
+      if(/\b(?:EOD|end of (?:the )?day)\b/i.test(fragment)) { data.timeNotes ||= {};data.timeNotes[field]='EOD — exact time and timezone not specified';data.warnings.push('EOD is retained as a note. Confirm the exact cutoff time and timezone.'); }
     });
     if (/cancelled|canceled/i.test(text)) data.stage = 'Cancelled';
     else if (/not\s+shortlisted|not\s+selected|did not qualify/i.test(text)) data.stage = 'Not shortlisted';
@@ -84,7 +124,7 @@
     else if (/shortlisted|you.{0,20}qualified|selected for (?:the )?(?:next|final)/i.test(text)) data.stage = 'Shortlisted';
     else if (/participation.{0,25}confirmed|attendance confirmed for/i.test(text)) data.stage = 'Participation confirmed';
     else if (/(?:submission|proposal).{0,25}(?:received|submitted|confirmed)|thank you for submitting/i.test(text)) data.stage = 'Proposal submitted';
-    else if (/registration.{0,35}(?:confirmed|successful|complete)|you are registered/i.test(text)) data.stage = 'Registered';
+    else if (/registration.{0,35}(?:confirmed|successful|complete)|you (?:are|have been) registered|you[’']re registered/i.test(text)) data.stage = 'Registered';
     else if (/certificate of (?:completion|attendance)|event completed/i.test(text)) data.stage = 'Completed';
     return data;
   }
@@ -124,15 +164,39 @@
   function apply(event, data, sourceId, at = new Date().toISOString()) {
     const changes = differences(event, data);
     for (const change of changes) {
-      event.history.push({ ...change, source: sourceId, at });
+      event.history.push({ ...change, id:uid('change'), previousSource:event.factSources?.[change.field]||'', source: sourceId, at });
       if (FIELDS.includes(change.field)) event.dates[change.field] = change.value;
       else event[change.field] = change.value;
       event.factSources ||= {};
       event.factSources[change.field] = sourceId;
     }
+    event.factCheckedAt ||= {};
+    for(const [field,value] of Object.entries(data.dates||{})) if(event.dates[field]===value) event.factCheckedAt[field]=at;
     if (changes.some(x => x.field === 'stage')) event.journey.push({ label: data.stage, date: at.slice(0, 10), source: sourceId });
     if (!event.sources.includes(sourceId)) event.sources.push(sourceId);
     return changes;
+  }
+  function undo(event, changeId, sourceId, at=new Date().toISOString()) {
+    const index=event.history.findIndex(h=>h.id===changeId),h=event.history[index];
+    if(!h||h.undoneAt||h.undoOf)throw Error('This change is not available to undo.');
+    if(![...FIELDS,'stage','venue','organizer','name','url','registrationId'].includes(h.field))throw Error('Unsupported history field.');
+    if(event.history.slice(index+1).some(n=>n.field===h.field))throw Error('Only the most recent change to this field can be undone.');
+    const current=FIELDS.includes(h.field)?event.dates[h.field]||'':event[h.field]||'';
+    if(current!==h.value)throw Error('This fact changed since the history entry. Review its current value.');
+    if(FIELDS.includes(h.field)){if(h.old)event.dates[h.field]=h.old;else delete event.dates[h.field];}else event[h.field]=h.old||'';
+    event.factSources ||= {};if(h.previousSource)event.factSources[h.field]=h.previousSource;else delete event.factSources[h.field];
+    event.factCheckedAt ||= {};event.factCheckedAt[h.field]=at;
+    event.history.push({id:uid('change'),field:h.field,old:h.value,value:h.old||'',source:sourceId,at,undoOf:h.id});h.undoneAt=at;
+    if(h.field==='stage')event.journey.push({label:event.stage,date:at.slice(0,10),source:sourceId});
+    event.sources.push(sourceId);return h;
+  }
+  function freshness(event,field,sources,now=new Date()) {
+    const history=event.history.filter(h=>h.field===field).at(-1);
+    const source=sources.find(s=>s.id===event.factSources?.[field]);
+    const at=event.factCheckedAt?.[field]||history?.at||source?.date;
+    if(!at||!Number.isFinite(Date.parse(at)))return {at:null,stale:true,label:'Not yet checked'};
+    const days=Math.floor((now-Date.parse(at))/86400000);
+    return {at,stale:days>30,label:(days>30?'Recheck source · ':'Updated / checked · ')+at.slice(0,10)};
   }
   function fingerprint(text) { return text.toLowerCase().replace(/\s+/g, ' ').trim(); }
   function conflicts(events, after = today()) {
@@ -163,6 +227,7 @@
       const end = new Date(date + 'T00:00:00Z'); end.setUTCDate(end.getUTCDate() + 1);
       lines.push('BEGIN:VEVENT', 'UID:' + encodeURIComponent(event.id + '-' + field) + '@campusrelay', 'DTSTAMP:' + now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''), 'DTSTART;VALUE=DATE:' + date.replace(/-/g, ''), 'DTEND;VALUE=DATE:' + end.toISOString().slice(0, 10).replace(/-/g, ''), 'SEQUENCE:' + event.history.length, 'SUMMARY:' + icsEscape(event.name + ' · ' + field), 'DESCRIPTION:' + icsEscape('Participation: ' + event.stage + '\nDate reviewed in CampusRelay. Calendar export is a snapshot.'), 'LOCATION:' + icsEscape(event.venue || ''));
       if (normalizeUrl(event.url)) lines.push('URL:' + normalizeUrl(event.url));
+      if (/deadline/i.test(field)) lines.push('BEGIN:VALARM','TRIGGER:-P1D','ACTION:DISPLAY','DESCRIPTION:'+icsEscape(event.name+' · '+field+' tomorrow'),'END:VALARM');
       lines.push('END:VEVENT');
     }
     lines.push('END:VCALENDAR'); return lines.map(fold).join('\r\n') + '\r\n';
@@ -180,7 +245,19 @@
       if (e.url && !normalizeUrl(e.url)) throw new Error('An event URL is invalid.');
       for (const key of ['organizer', 'venue', 'registrationId', 'notes', 'category']) if (e[key] != null && typeof e[key] !== 'string') throw new Error('An event detail is invalid.');
       for (const j of e.journey) if (!j || typeof j.label !== 'string' || !validDate(j.date) || typeof j.source !== 'string') throw new Error('A participation record is invalid.');
-      for (const h of e.history) if (!h || typeof h.field !== 'string' || typeof h.value !== 'string' || typeof h.at !== 'string' || !Number.isFinite(Date.parse(h.at)) || typeof h.source !== 'string') throw new Error('A change record is invalid.');
+      for (const h of e.history) {
+        if (!h || ![...FIELDS,'stage','venue','organizer','name','url','registrationId'].includes(h.field) || typeof h.value !== 'string' || typeof h.old !== 'string' || typeof h.at !== 'string' || !Number.isFinite(Date.parse(h.at)) || typeof h.source !== 'string') throw new Error('A change record is invalid.');
+        for(const v of [h.old,h.value]) {
+          if(FIELDS.includes(h.field)&&v&&!validDate(v))throw new Error('A historical date is invalid.');
+          if(h.field==='stage'&&v&&!STAGES.includes(v))throw new Error('A historical stage is invalid.');
+          if(h.field==='url'&&v&&!normalizeUrl(v))throw new Error('A historical URL is invalid.');
+        }
+        for(const key of ['id','previousSource','undoOf','undoneAt'])if(h[key]!=null&&typeof h[key]!=='string')throw new Error('History metadata is invalid.');
+      }
+      for(const key of ['factSources','factCheckedAt','timeNotes'])if(e[key]!=null){
+        if(typeof e[key]!=='object'||Array.isArray(e[key]))throw new Error('Fact metadata is invalid.');
+        for(const [field,value] of Object.entries(e[key]))if(![...FIELDS,'stage','venue','organizer','name','url','registrationId'].includes(field)||typeof value!=='string'||(key==='factCheckedAt'&&!Number.isFinite(Date.parse(value))))throw new Error('Fact metadata is invalid.');
+      }
     }
     const sourceIds = new Set();
     for (const s of input.sources) {
@@ -201,5 +278,5 @@
     }
     return JSON.parse(JSON.stringify(input));
   }
-  return { STAGES, FIELDS, CLOSED, uid, today, validDate, parseDate, normalizeUrl, extract, match, differences, stale, apply, fingerprint, conflicts, calendar, teamSummary, validateBackup };
+  return { STAGES, FIELDS, CLOSED, uid, today, validDate, parseDate, normalizeUrl, cleanText, detectSource, splitMessages, extract, match, differences, stale, apply, undo, freshness, fingerprint, conflicts, calendar, teamSummary, validateBackup };
 });

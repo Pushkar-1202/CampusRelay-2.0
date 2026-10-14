@@ -1,80 +1,94 @@
-# CampusRelay
+# CampusRelay 2.0
 
-**A living, evidence-backed timeline for student opportunities.**
+[![Quality checks](https://github.com/Pushkar-1202/CampusRelay-2.0/actions/workflows/ci.yml/badge.svg)](https://github.com/Pushkar-1202/CampusRelay-2.0/actions/workflows/ci.yml)
 
-CampusRelay tracks hackathons, competitions, workshops, and personal commitments as their details change. It connects participation stages, milestones, source references, and transparent history in one browser workspace.
+A browser-local, evidence-backed timeline for student opportunities. This is a separate continuation of CampusRelay; the original repository and hosted version are preserved.
 
-[Open the private live Site](https://campusrelay-living-timeline.abloomsage128.chatgpt.site)
+## Run
 
-## Run locally
-
-Requires Node.js 20 or newer. There are no package dependencies to install.
+Requires Node.js 22 or newer.
 
 ```sh
+npm ci
 npm run dev
 ```
 
-Open http://127.0.0.1:4173. Check the application and run the engine tests:
+Open http://127.0.0.1:4173. Source lives in `src/`; `npm run build` bundles and minifies it into `dist/`.
+
+## Improvements
+
+- Summary-first review, with the full form behind **Edit details**.
+- Automatic source detection, clipboard paste, image attachments, .eml uploads/drop, and explicit batch boundaries.
+- HTML and quoted-forward cleanup, abbreviated dates, selected Hinglish deadline patterns, and EOD warnings without inventing an hour or time zone.
+- Seeded uncertain review. Ambiguous messages cannot silently merge; multi-event digests are flagged and blocked from approval as one event.
+- Approval receipts name the change and link to the timeline. Old dates remain struck through beside new dates.
+- Date freshness, stale-source warnings, and latest-field change undo with preserved history.
+- iCalendar snapshot export with stable UID, sequence, and a 24-hour deadline reminder.
+- Privacy panel, workspace wipe, restore replacement preview, storage-failure banner, and backup export.
+- Readable system typography, mobile countdown fix, keyboard calendar, focus restoration, non-color labels, and a readable still hero.
+- Bundled/minified assets, no remote fonts, deferred extended landing motion, and motion disabled on coarse-pointer or reduced-motion devices.
+- Engine regressions, Playwright interaction/security/mobile tests, axe audits, and GitHub Actions.
+
+## Try the workflow
+
+1. Open the workspace. The sample includes an uncertain review.
+2. Click **Import update →**, then the simulated deadline example.
+3. Review the summary and approve the date change.
+4. Follow the receipt to the timeline; inspect old/new values and source.
+5. Open the event history and undo the latest change.
+
+Sample communications are explicitly simulated. They are not evidence of live monitoring or measured extraction accuracy.
+
+## Trust and scope
+
+Extraction is deterministic and local. There is no connected AI service, OCR, authenticated email ingestion, public-page fetching, server database, or live team synchronization. Images are evidence attachments; paste their text for extraction. Multipart email and arbitrary language formats may need manual cleanup.
+
+Sender addresses and forwarded headers are **read, not authenticated**. Every import requires review. Ambiguous numeric dates are withheld, assumed years are flagged, and EOD retains an explicit uncertainty note. Freshness records local review/update time, not a live organizer-website check.
+
+Imported content stays in this browser's localStorage. It is never sent to an AI provider or uploaded by this app. The host receives normal asset requests. Browser storage is origin-specific and not encrypted by this app. Export a backup before changing hosts. Wipe removes local records, not downloaded backups.
+
+Calendar exports are snapshots, not subscription feeds. Alarms are 24 hours before an all-day deadline's start; alarm support and re-import behavior depend on the calendar client. ConflictIQ detects date-level potential clashes without assuming class schedules or unknown event times.
+
+## Verify
 
 ```sh
 npm run check
 npm test
+npm run build
+npx playwright install chromium
+npm run test:ui
 ```
 
-## Features
+`npm run test:a11y` runs axe audits. Reports are generated locally and uploaded by CI. Automated audits cannot establish complete accessibility conformance.
 
-- Animated landing page with floating event cards, an interactive simulated journey, scroll reveals, and a pause control
-- Dark workspace styling, animated entrances, and hover feedback with reduced-motion support
-- Chronological milestones, searchable event cards, and participation filters
-- Import pasted communications, text files, and .eml messages
-- Attach a PNG, JPEG, or WebP poster as source evidence (up to 1.5 MB)
-- Extract explicit dates, names, registration IDs, URLs, venues, and participation outcomes
-- Rank matches by identifiers, URLs, names, and organizer clues; mismatched IDs reduce confidence
-- Preserve ambiguous proposals in a review queue, with editable facts and individual change approval
-- Detect stale proposals so older reviews cannot silently replace facts changed in another tab
-- Record previous/new values, stages, sources, and timestamps
-- Add and edit events, including notes, venues, and personal commitments
-- ConflictIQ highlights same-day commitments and deadlines within two days
-- Export all or individual events as an iCalendar (.ics) snapshot
-- Copy/download team summaries that omit raw emails, attachments, registration IDs, and notes
-- Export and restore validated JSON backups
-- Persist records in localStorage and reflect changes across browser tabs
+The mobile smoke test uses a 390px touch viewport, fourfold CPU throttling, 150ms latency, and limited bandwidth. It is a simulation; physical low-end-phone testing remains pending. See [device validation](docs/device-validation.md).
 
-## Demo
+### Real-message evaluation remains pending
 
-1. Select **Try the demo** on the overview.
-2. Analyze the simulated Northstar deadline extension.
-3. Review the original message and compare October 17 with October 20.
-4. Approve the change and inspect its source-backed history.
-5. Import **Status update** to advance participation.
-6. Use **Uncertain match** to test review without an event identifier.
+No consented real inbox dataset is available here. **No real-world name/date/stage accuracy percentage is claimed.** Unit fixtures are synthetic regression cases.
 
-Sample events and simulated messages are labeled. The demo does not represent live monitoring or measured extraction accuracy.
+See [evaluation protocol](evaluation/README.md) to collect 20–30 redacted, consented messages, record independent answers, and run `npm run evaluate -- evaluation/private/messages.json`. Private data and private reports are ignored by Git.
 
-## Reliability and scope
+## Deploy on Vercel
 
-Text extraction runs locally using deterministic rules; there is no connected AI model. Images are retained as evidence, and their text must be pasted by the user. URLs are recorded as references rather than fetched. Forwarding, remote storage, authentication, live calendar feeds, and team synchronization are future integration work.
+Import **Pushkar-1202/CampusRelay-2.0** with:
 
-All imports require review. A high match identifies a likely event, without authenticating the source. Approval records the student's decision. Ambiguous numeric dates are withheld, assumed years are flagged, and invalid dates are rejected.
-
-ConflictIQ compares known dates. Without start/end times, same-day commitments are potential clashes. Nearby deadlines indicate workload pressure. Calendar exports are snapshots and must be exported again after updates. Records stay in the current browser; export a backup before clearing site data or switching devices.
-
-## Structure
-
-| Path | Purpose |
+| Setting | Value |
 | --- | --- |
-| `dist/index.html` | App shell and accessible dialogs |
-| `dist/styles.css`, `dist/enhancements.css` | Responsive interface |
-| `dist/engine.js` | Extraction, matching, changes, conflicts, calendar, backup validation |
-| `dist/app.js` | Browser state, views, and review interactions |
-| `dist/landing.js`, `dist/landing.css` | Animated product story and interactive landing demonstration |
-| `dist/workspace-motion.css` | Dark workspace styling and transition effects |
-| `dist/seed.js` | Labeled demonstration records |
-| `scripts/serve.cjs` | Dependency-free local server |
-| `tests/engine.test.cjs` | Reconciliation regression tests |
+| Root Directory | Repository root (leave blank) |
+| Framework Preset | Other |
+| Install Command | npm ci |
+| Build Command | npm run build |
+| Output Directory | dist |
+| Environment variables | None |
 
-Serve `dist/` on any static host. No build step is required.
+`vercel.json` includes build/output settings. Remove conflicting old project overrides. Landing opens at `/`, workspace at `/#overview`; fragment navigation needs no rewrite.
 
-The landing page includes an automatic perspective hero, a four-chapter pinned scroll story, visible-section demo autoplay, scroll progress and a persistent motion toggle. Native scrolling remains available; reduced-motion preferences disable decorative movement. The story is explicitly simulated.
+## Source layout
 
-Workspace enhancements: a date-driven next-milestone spotlight, seven-day planner, browsable month calendar, redesigned event cards and mobile bottom navigation. Quick search (Ctrl/Cmd+K) finds local events and actions with arrow-key/Enter navigation. Calendar and planner use recorded dates only; closed events are excluded. Decorative motion respects reduced-motion preferences.
+- `src/engine.js`: extraction, matching, validation, reconciliation, undo, calendar.
+- `src/app.js`, `src/workspace.js`, `src/reliability.js`: workspace and review flows.
+- `src/landing.js`, `src/cinematic.js`: animated landing and still fallback.
+- `src/accessibility.css`: typography, focus, contrast, responsive fixes.
+- `scripts/`: build, local server, syntax checks, evaluation runner.
+- `tests/`: engine and browser regressions.

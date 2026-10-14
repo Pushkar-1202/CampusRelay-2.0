@@ -49,7 +49,7 @@
     </main><footer class="lp-footer"><a class="lp-brand" href="#home">${mark}<span>campus<span>relay</span></span></a><p>Your event journey. Always in context.</p><a href="https://github.com/Pushkar-1202/CampusRelay" target="_blank" rel="noopener noreferrer">Explore the project ${icon('diagonal')}</a></footer>
   `;
   document.querySelector('.skip-link').after(root);
-  const media = matchMedia('(prefers-reduced-motion: reduce)');
+  const media = matchMedia('(prefers-reduced-motion: reduce), (pointer: coarse)');
   let paused = media.matches, visible = false, interval = null, step = 0;
   const scenes = {
     deadline: {type:'DEADLINE UPDATE',tag:'Reviewed change',title:'A little breathing room.',description:'Northstar Hackathon · proposal submission',body:'<div class="scene-date-change"><div><small>PREVIOUS</small><s>October 15</s></div><span>→</span><div><small>UPDATED</small><strong>October 17</strong></div></div>',source:'“The proposal deadline is extended to October 17.”',note:'Previous date preserved. New date approved.'},
@@ -88,6 +88,7 @@
   root.querySelectorAll('.how-card,.feature-small,.feature-large').forEach(card => {
     card.addEventListener('pointermove', event => { if (media.matches || paused || event.pointerType === 'touch') return; const bounds = card.getBoundingClientRect(); card.style.setProperty('--spot-x', (event.clientX - bounds.left)+'px'); card.style.setProperty('--spot-y', (event.clientY - bounds.top)+'px'); });
   });
+  root.querySelector('.lp-hero-copy').insertAdjacentHTML('beforeend','<div class="hero-still"><strong>Sample journey, at a glance</strong><br>Registered → Proposal submitted → Shortlisted.<br>Proposal deadline: October 15 → October 17.<br>Every important change is reviewed and its source retained.</div>');
   scene('deadline'); schedule();
   window.CampusLanding = { setVisible(value) { visible = value; root.hidden = !value; document.body.classList.toggle('landing-visible',value); document.querySelector('.app-shell').hidden = value; document.querySelector('.skip-link').href = value ? '#landing-main' : '#content'; schedule(); } };
 })();

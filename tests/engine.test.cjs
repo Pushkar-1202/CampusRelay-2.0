@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const E = require('../dist/engine.js');
+const E = require('../src/engine.js');
 const event = () => ({id:'one',name:'Northstar Hackathon 2026',organizer:'Northstar',stage:'Shortlisted',registrationId:'NST-2048',url:'https://example.com/northstar',dates:{'Proposal deadline':'2026-10-17'},sources:[],history:[],journey:[]});
 test('date validation rejects rollover and ambiguous numeric dates', () => {
   assert.equal(E.parseDate('deadline 2026-10-20'), '2026-10-20');
