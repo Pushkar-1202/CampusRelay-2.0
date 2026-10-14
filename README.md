@@ -74,3 +74,5 @@ ConflictIQ compares known dates. Without start/end times, same-day commitments a
 | `tests/engine.test.cjs` | Reconciliation regression tests |
 
 Serve `dist/` on any static host. No build step is required.
+
+The landing page includes an automatic perspective hero, a four-chapter pinned scroll story, visible-section demo autoplay, scroll progress and a persistent motion toggle. Native scrolling remains available; reduced-motion preferences disable decorative movement. The story is explicitly simulated.
