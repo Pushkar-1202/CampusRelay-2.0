@@ -76,3 +76,5 @@ ConflictIQ compares known dates. Without start/end times, same-day commitments a
 Serve `dist/` on any static host. No build step is required.
 
 The landing page includes an automatic perspective hero, a four-chapter pinned scroll story, visible-section demo autoplay, scroll progress and a persistent motion toggle. Native scrolling remains available; reduced-motion preferences disable decorative movement. The story is explicitly simulated.
+
+Workspace enhancements: a date-driven next-milestone spotlight, seven-day planner, browsable month calendar, redesigned event cards and mobile bottom navigation. Quick search (Ctrl/Cmd+K) finds local events and actions with arrow-key/Enter navigation. Calendar and planner use recorded dates only; closed events are excluded. Decorative motion respects reduced-motion preferences.
